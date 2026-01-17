@@ -28,7 +28,10 @@ if (!fs.existsSync(RESULTS_DIR)) fs.mkdirSync(RESULTS_DIR, { recursive: true });
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from output directory (for images)
+// Serve static files from public directory (frontend)
+app.use(express.static(path.join(process.cwd(), 'public')));
+
+// Serve static files from output directory (for images and results)
 app.use('/output', express.static(OUTPUT_DIR));
 
 // Logging
