@@ -22,6 +22,13 @@
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
+    .pulse-slow {
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
   </style>
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen">
@@ -110,6 +117,22 @@
           </form>
         </div>
 
+        <!-- CSV Upload -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
+          <h2 class="text-sm font-semibold text-gray-400 uppercase mb-4">📄 Bulk Upload (CSV)</h2>
+          <p class="text-gray-400 text-xs mb-3">Upload a CSV with columns: <code class="bg-gray-700 px-1 rounded">company_name</code>, <code class="bg-gray-700 px-1 rounded">company_domain</code></p>
+          <input type="file" id="csvFile" accept=".csv" 
+            class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-orange-600 file:text-white hover:file:bg-orange-700 file:cursor-pointer cursor-pointer">
+          <div id="csvPreview" class="mt-3 hidden">
+            <div class="text-xs text-gray-500 mb-2">Preview:</div>
+            <div id="csvList" class="text-sm space-y-1 max-h-32 overflow-y-auto"></div>
+            <button onclick="processCSV()" id="csvProcessBtn"
+              class="mt-3 w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors text-sm">
+              Process All Companies
+            </button>
+          </div>
+        </div>
+
         <!-- Quick Examples -->
         <div class="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
           <h2 class="text-sm font-semibold text-gray-400 uppercase mb-4">💡 Quick Examples</h2>
@@ -148,13 +171,21 @@
 
           <!-- Loading State -->
           <div id="loadingState" class="hidden flex-col items-center justify-center h-[600px]">
-            <div class="animate-spin text-6xl mb-4">⏳</div>
+            <div class="text-6xl mb-4 pulse-slow">🔬</div>
             <p class="text-lg font-medium text-white">Researching<span class="loading-dots"></span></p>
             <p id="loadingStatus" class="text-sm text-gray-400 mt-2">Starting pipeline...</p>
             <div class="mt-6 w-64 bg-gray-700 rounded-full h-2">
               <div id="progressBar" class="bg-orange-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
             </div>
             <p class="text-xs text-gray-500 mt-4">This takes 3-5 minutes - please wait</p>
+          </div>
+
+          <!-- Batch Progress State -->
+          <div id="batchState" class="hidden p-6">
+            <h3 class="text-lg font-bold text-white mb-4">📊 Batch Processing</h3>
+            <div id="batchProgress" class="space-y-2">
+              <!-- Will be populated by JS -->
+            </div>
           </div>
 
           <!-- Results State -->
@@ -188,12 +219,20 @@
     const submitBtn = document.getElementById('submitBtn');
     const initialState = document.getElementById('initialState');
     const loadingState = document.getElementById('loadingState');
+    const batchState = document.getElementById('batchState');
     const resultsState = document.getElementById('resultsState');
     const loadingStatus = document.getElementById('loadingStatus');
     const progressBar = document.getElementById('progressBar');
+    const csvFile = document.getElementById('csvFile');
+    const csvPreview = document.getElementById('csvPreview');
+    const csvList = document.getElementById('csvList');
+    const batchProgress = document.getElementById('batchProgress');
 
     // Pipeline steps
     const pipelineSteps = ['agentql', 'yutori', 'freepik'];
+    
+    // CSV data storage
+    let csvData = [];
 
     // Initialize
     async function init() {
@@ -266,6 +305,106 @@
       } catch (e) {
         alert('Could not load result');
       }
+    }
+
+    // CSV file handling
+    csvFile.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target.result;
+        const lines = text.split('\n').filter(line => line.trim());
+        
+        // Parse CSV
+        csvData = [];
+        const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+        const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('company'));
+        const domainIdx = headers.findIndex(h => h.includes('domain') || h.includes('url') || h.includes('website'));
+        
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+          if (values[nameIdx]) {
+            csvData.push({
+              name: values[nameIdx],
+              domain: values[domainIdx] || ''
+            });
+          }
+        }
+        
+        if (csvData.length > 0) {
+          csvList.innerHTML = csvData.map((c, i) => `
+            <div class="flex justify-between items-center px-2 py-1 bg-gray-700 rounded">
+              <span>${c.name}</span>
+              <span class="text-gray-500 text-xs">${c.domain || '(auto)'}</span>
+            </div>
+          `).join('');
+          csvPreview.classList.remove('hidden');
+        } else {
+          alert('Could not parse CSV. Make sure it has company_name column.');
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // Process CSV batch
+    async function processCSV() {
+      if (csvData.length === 0) return;
+      
+      showState('batch');
+      
+      // Initialize progress display
+      batchProgress.innerHTML = csvData.map((c, i) => `
+        <div id="batch-${i}" class="flex items-center gap-3 px-3 py-2 bg-gray-700 rounded-lg">
+          <span id="batch-status-${i}" class="text-lg">⏳</span>
+          <div class="flex-1">
+            <div class="font-medium text-sm">${c.name}</div>
+            <div class="text-xs text-gray-500">${c.domain || 'auto-detect'}</div>
+          </div>
+          <span id="batch-time-${i}" class="text-xs text-gray-500">Waiting...</span>
+        </div>
+      `).join('');
+      
+      // Process each company sequentially
+      for (let i = 0; i < csvData.length; i++) {
+        const c = csvData[i];
+        document.getElementById(`batch-status-${i}`).textContent = '🔄';
+        document.getElementById(`batch-time-${i}`).textContent = 'Processing...';
+        
+        const startTime = Date.now();
+        try {
+          const res = await fetch(`${API_BASE}/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              company_name: c.name,
+              company_domain: c.domain || undefined
+            })
+          });
+          
+          const data = await res.json();
+          const duration = ((Date.now() - startTime) / 1000).toFixed(0);
+          
+          document.getElementById(`batch-status-${i}`).textContent = '✅';
+          document.getElementById(`batch-time-${i}`).textContent = `${duration}s`;
+          document.getElementById(`batch-${i}`).classList.add('bg-green-900/30');
+        } catch (e) {
+          document.getElementById(`batch-status-${i}`).textContent = '❌';
+          document.getElementById(`batch-time-${i}`).textContent = 'Failed';
+          document.getElementById(`batch-${i}`).classList.add('bg-red-900/30');
+        }
+      }
+      
+      // Add completion message
+      batchProgress.innerHTML += `
+        <div class="mt-4 p-3 bg-green-900/30 rounded-lg text-center">
+          <span class="text-green-400 font-medium">✓ Batch complete!</span>
+          <button onclick="loadSavedResults(); showState('initial');" class="ml-4 text-sm text-blue-400 hover:underline">View Results</button>
+        </div>
+      `;
+      
+      loadSavedResults();
     }
 
     // Submit research form
@@ -364,10 +503,12 @@
     function showState(state) {
       initialState.classList.add('hidden');
       loadingState.classList.add('hidden');
+      batchState.classList.add('hidden');
       resultsState.classList.add('hidden');
       
       if (state === 'initial') initialState.classList.remove('hidden');
       if (state === 'loading') loadingState.classList.remove('hidden');
+      if (state === 'batch') batchState.classList.remove('hidden');
       if (state === 'results') resultsState.classList.remove('hidden');
     }
 
@@ -465,7 +606,13 @@
           ${brief.sources && brief.sources.length > 0 ? `
             <div class="text-sm text-gray-500">
               <span class="font-semibold">Sources:</span>
-              ${brief.sources.map(s => `<a href="${s}" target="_blank" class="text-blue-400 hover:underline ml-2">${new URL(s).hostname}</a>`).join('')}
+              ${brief.sources.map(s => {
+                try {
+                  return `<a href="${s}" target="_blank" class="text-blue-400 hover:underline ml-2">${new URL(s).hostname}</a>`;
+                } catch {
+                  return `<a href="${s}" target="_blank" class="text-blue-400 hover:underline ml-2">${s}</a>`;
+                }
+              }).join('')}
             </div>
           ` : ''}
           
