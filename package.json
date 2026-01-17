@@ -1,0 +1,19 @@
+{
+  "name": "account-brief-generator",
+  "version": "1.0.0",
+  "description": "AI-powered account research and outreach pack generator",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": ["hackathon", "yutori", "agentql", "freepik", "research"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.2",
+    "cors": "^2.8.5"
+  }
+}
