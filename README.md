@@ -22,7 +22,8 @@ An AI-powered account research agent that helps **Corgi AI** (startup insurance)
 |-----------|--------|-------|
 | **Express Server** | ✅ Working | Running on localhost:3000 |
 | **Yutori Research API** | ✅ Working | Returns real company research (takes 3-5 mins) |
-| **Freepik Image API** | ⚠️ Partial | Calls succeed but image URL not always returned |
+| **Freepik Image API** | ✅ Working | Generates hero images, saves to output/images/ |
+| **Output Storage** | ✅ Working | Results saved to output/results/ |
 | **Mock Fallback** | ✅ Working | Instant fallback if Yutori fails |
 
 ## 🚀 Quick Demo (What You Need To Do)
@@ -103,7 +104,9 @@ curl -X POST http://localhost:3000/generate \
 |----------|--------|-------------|
 | `/health` | GET | Server status and API config |
 | `/targets` | GET | List of target companies |
-| `/generate` | POST | Generate account brief |
+| `/results` | GET | List all saved research results |
+| `/results/:filename` | GET | Get a specific saved result |
+| `/generate` | POST | Generate account brief (saves to output/) |
 
 ### Generate Request
 ```json
@@ -149,10 +152,13 @@ curl -X POST http://localhost:3000/generate \
 ```
 chopin/
 ├── server.js                 # Express server (main entry)
+├── output/                   # Generated results & images
+│   ├── results/              # JSON research briefs
+│   └── images/               # Freepik hero images
 ├── src/
 │   ├── clients/
 │   │   ├── yutoriClient.js   # Yutori Research API ✅
-│   │   └── freepikClient.js  # Freepik Image API ⚠️
+│   │   └── freepikClient.js  # Freepik Image API ✅
 │   ├── prompts/
 │   │   └── yutoriPrompt.js   # Simplified prompt for Corgi AI
 │   └── schemas/
@@ -167,7 +173,7 @@ chopin/
 ## 🏆 Hackathon Tracks
 
 - ✅ **Yutori** - Real research API integration
-- ✅ **Freepik** - Image generation (partial)
+- ✅ **Freepik** - Hero image generation (saves to output/)
 - ✅ **Retool** - Agent UI layer
 - ✅ **Cline** - Entire codebase built with AI
 

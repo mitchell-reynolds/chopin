@@ -193,4 +193,33 @@ curl -X POST http://localhost:3000/generate \
 
 ---
 
+## 📂 Where Output is Stored
+
+All results are automatically saved to the `output/` directory:
+
+```
+output/
+├── results/           # JSON research briefs
+│   ├── freepik-run-1737078000000.json
+│   └── retool-run-1737078100000.json
+└── images/            # Freepik hero images (PNG)
+    ├── freepik-1737078000000.png
+    └── retool-1737078100000.png
+```
+
+### View Saved Results
+
+```bash
+# List all saved results
+curl http://localhost:3000/results | jq
+
+# Get a specific result
+curl http://localhost:3000/results/freepik-run-123456.json | jq
+
+# Open image in browser
+open http://localhost:3000/output/images/freepik-123456.png
+```
+
+---
+
 **Good luck! 🍀**

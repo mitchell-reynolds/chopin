@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 const { TARGET_COMPANIES, mockResponse } = require('./src/schemas/responseSchema');
 const { generateAccountBrief } = require('./src/clients/yutoriClient');
 const { generateHeroImageSafe } = require('./src/clients/freepikClient');
@@ -12,9 +14,20 @@ const PORT = process.env.PORT || 3000;
 const USE_YUTORI = !!process.env.YUTORI_API_KEY;
 const USE_FREEPIK = !!process.env.FREEPIK_API_KEY;
 
+// Output directory for saved results
+const OUTPUT_DIR = path.join(process.cwd(), 'output');
+const RESULTS_DIR = path.join(OUTPUT_DIR, 'results');
+
+// Ensure output directories exist
+if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+if (!fs.existsSync(RESULTS_DIR)) fs.mkdirSync(RESULTS_DIR, { recursive: true });
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from output directory (for images)
+app.use('/output', express.static(OUTPUT_DIR));
 
 // Logging
 app.use((req, res, next) => {
@@ -39,6 +52,45 @@ app.get('/targets', (req, res) => {
     targets: TARGET_COMPANIES,
     message: 'Pre-built list of startup targets for insurance pitch'
   });
+});
+
+// List saved results
+app.get('/results', (req, res) => {
+  try {
+    const files = fs.readdirSync(RESULTS_DIR)
+      .filter(f => f.endsWith('.json'))
+      .map(f => {
+        const filepath = path.join(RESULTS_DIR, f);
+        const stats = fs.statSync(filepath);
+        return {
+          filename: f,
+          created: stats.mtime,
+          path: `/output/results/${f}`
+        };
+      })
+      .sort((a, b) => b.created - a.created); // newest first
+    
+    res.json({
+      count: files.length,
+      results: files
+    });
+  } catch (error) {
+    res.json({ count: 0, results: [] });
+  }
+});
+
+// Get a specific saved result
+app.get('/results/:filename', (req, res) => {
+  try {
+    const filepath = path.join(RESULTS_DIR, req.params.filename);
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({ error: 'Result not found' });
+    }
+    const data = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Main endpoint - Generate account brief
@@ -66,7 +118,7 @@ app.post('/generate', async (req, res) => {
     console.log(`[${runId}] Target: ${company_name || domain}, Persona: ${persona}`);
     
     let briefData = null;
-    let heroImageUrl = null;
+    let heroImage = null;
 
     // Phase 1: Yutori Research (or mock)
     if (USE_YUTORI) {
@@ -77,13 +129,13 @@ app.post('/generate', async (req, res) => {
       } catch (error) {
         console.error(`[${runId}] Yutori failed: ${error.message}`);
         console.log(`[${runId}] Using mock data as fallback`);
-        briefData = mockResponse.data;
+        briefData = JSON.parse(JSON.stringify(mockResponse.data)); // Deep copy
         briefData.company.name = company_name || domain;
         briefData.company.domain = domain;
       }
     } else {
       console.log(`[${runId}] Yutori disabled - using mock data`);
-      briefData = mockResponse.data;
+      briefData = JSON.parse(JSON.stringify(mockResponse.data)); // Deep copy
       briefData.company.name = company_name || domain;
       briefData.company.domain = domain;
     }
@@ -92,13 +144,18 @@ app.post('/generate', async (req, res) => {
     if (USE_FREEPIK && briefData) {
       try {
         console.log(`[${runId}] Generating hero image...`);
-        heroImageUrl = await generateHeroImageSafe(
+        const industry = briefData.company?.industry || 'Technology';
+        heroImage = await generateHeroImageSafe(
           briefData.company?.name || company_name,
-          'Startup Insurance'
+          industry
         );
-        if (heroImageUrl) {
-          console.log(`[${runId}] ✓ Image generated`);
-          briefData.hero_image_url = heroImageUrl;
+        if (heroImage) {
+          console.log(`[${runId}] ✓ Image generated: ${heroImage.filename}`);
+          briefData.hero_image = {
+            filename: heroImage.filename,
+            path: `/output/images/${heroImage.filename}`,
+            dataUri: heroImage.dataUri?.substring(0, 100) + '...' // Truncate for response
+          };
         }
       } catch (error) {
         console.log(`[${runId}] Freepik skipped: ${error.message}`);
@@ -108,7 +165,8 @@ app.post('/generate', async (req, res) => {
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`[${runId}] === DONE in ${duration}s ===\n`);
 
-    res.json({
+    // Build final response
+    const result = {
       run_id: runId,
       timestamp: new Date().toISOString(),
       status: 'success',
@@ -118,9 +176,27 @@ app.post('/generate', async (req, res) => {
       meta: {
         duration_seconds: parseFloat(duration),
         yutori_used: USE_YUTORI,
-        freepik_used: !!heroImageUrl
+        freepik_used: !!heroImage
       }
-    });
+    };
+
+    // Save result to file
+    const safeCompanyName = (company_name || domain).toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const resultFilename = `${safeCompanyName}-${runId}.json`;
+    const resultPath = path.join(RESULTS_DIR, resultFilename);
+    
+    // Save full result (with complete dataUri for hero image)
+    const resultToSave = JSON.parse(JSON.stringify(result));
+    if (heroImage && briefData.hero_image) {
+      resultToSave.data.hero_image.dataUri = heroImage.dataUri; // Full dataUri for saved file
+    }
+    fs.writeFileSync(resultPath, JSON.stringify(resultToSave, null, 2));
+    console.log(`[${runId}] Result saved to: ${resultPath}`);
+    
+    // Add path info to response
+    result.saved_to = `/output/results/${resultFilename}`;
+
+    res.json(result);
     
   } catch (error) {
     console.error(`[${runId}] ERROR: ${error.message}`);
@@ -143,9 +219,13 @@ app.listen(PORT, () => {
   console.log(`\n🔧 APIs:`);
   console.log(`   Yutori: ${USE_YUTORI ? '✓' : '✗'}`);
   console.log(`   Freepik: ${USE_FREEPIK ? '✓' : '✗'}`);
+  console.log(`\n📂 Output:`);
+  console.log(`   Results: ${RESULTS_DIR}`);
+  console.log(`   Images:  ${path.join(OUTPUT_DIR, 'images')}`);
   console.log(`\n📋 Endpoints:`);
   console.log(`   GET  /health    - Status check`);
   console.log(`   GET  /targets   - Target company list`);
+  console.log(`   GET  /results   - List saved results`);
   console.log(`   POST /generate  - Generate account brief`);
   console.log(`\n🎯 Demo targets: Yutori, Retool, TinyFish, Cline AI, Freepik\n`);
 });
