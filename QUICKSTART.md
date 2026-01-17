@@ -5,6 +5,7 @@ Get the Corgi AI account research demo running in 5 minutes!
 ## ✅ Pre-Flight Checklist
 
 - [x] API Keys configured in `.env`
+  - [x] MINO_API_KEY (AgentQL/TinyFish)
   - [x] YUTORI_API_KEY
   - [x] FREEPIK_API_KEY
 - [x] Node.js installed (v18+)
@@ -62,10 +63,16 @@ See [RETOOL_AGENT_SETUP.md](./RETOOL_AGENT_SETUP.md) - takes ~5 minutes
 
 | API | Purpose | Track |
 |-----|---------|-------|
-| **Yutori** | Deep web research + structured brief generation | ✅ Yutori Track |
+| **AgentQL** | Web scraping for evidence (homepage, pricing, careers) | ✅ AgentQL/TinyFish Track |
+| **Yutori** | Deep web research with evidence context | ✅ Yutori Track |
 | **Freepik** | AI-generated hero image for brief | ✅ Freepik Track |
 | **Retool** | Agent UI for conversational interface | ✅ Retool Track |
 | **Cline** | Entire codebase built with AI assistance | ✅ Cline Track |
+
+### Pipeline
+```
+AgentQL (scrape) → Yutori (research) → Freepik (image)
+```
 
 ---
 

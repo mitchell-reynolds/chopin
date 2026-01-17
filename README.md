@@ -21,10 +21,16 @@ An AI-powered account research agent that helps **Corgi AI** (startup insurance)
 | Component | Status | Notes |
 |-----------|--------|-------|
 | **Express Server** | ✅ Working | Running on localhost:3000 |
-| **Yutori Research API** | ✅ Working | Returns real company research (takes 3-5 mins) |
+| **AgentQL (TinyFish)** | ✅ Working | Scrapes company websites for evidence |
+| **Yutori Research API** | ✅ Working | Deep research with AgentQL evidence (3-5 mins) |
 | **Freepik Image API** | ✅ Working | Generates hero images, saves to output/images/ |
 | **Output Storage** | ✅ Working | Results saved to output/results/ |
-| **Mock Fallback** | ✅ Working | Instant fallback if Yutori fails |
+| **Mock Fallback** | ✅ Working | Instant fallback if APIs fail |
+
+### Pipeline Flow
+```
+AgentQL (scrape website) → Yutori (research with evidence) → Freepik (hero image)
+```
 
 ## 🚀 Quick Demo (What You Need To Do)
 
@@ -157,10 +163,11 @@ chopin/
 │   └── images/               # Freepik hero images
 ├── src/
 │   ├── clients/
+│   │   ├── agentqlClient.js  # AgentQL/TinyFish web scraping ✅
 │   │   ├── yutoriClient.js   # Yutori Research API ✅
 │   │   └── freepikClient.js  # Freepik Image API ✅
 │   ├── prompts/
-│   │   └── yutoriPrompt.js   # Simplified prompt for Corgi AI
+│   │   └── yutoriPrompt.js   # Prompt with AgentQL evidence
 │   └── schemas/
 │       └── responseSchema.js # Target companies & mock data
 ├── DEMO_SCRIPT.md            # 3-min demo with pre-saved results ⭐
@@ -172,8 +179,9 @@ chopin/
 
 ## 🏆 Hackathon Tracks
 
-- ✅ **Yutori** - Real research API integration
-- ✅ **Freepik** - Hero image generation (saves to output/)
+- ✅ **AgentQL/TinyFish** - Web scraping for evidence
+- ✅ **Yutori** - Deep research API integration
+- ✅ **Freepik** - Hero image generation
 - ✅ **Retool** - Agent UI layer
 - ✅ **Cline** - Entire codebase built with AI
 

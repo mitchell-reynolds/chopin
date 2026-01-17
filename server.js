@@ -6,6 +6,7 @@ const path = require('path');
 const { TARGET_COMPANIES, mockResponse } = require('./src/schemas/responseSchema');
 const { generateAccountBrief } = require('./src/clients/yutoriClient');
 const { generateHeroImageSafe } = require('./src/clients/freepikClient');
+const { extractCompanyEvidence } = require('./src/clients/agentqlClient');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,6 +14,7 @@ const PORT = process.env.PORT || 3000;
 // Feature flags
 const USE_YUTORI = !!process.env.YUTORI_API_KEY;
 const USE_FREEPIK = !!process.env.FREEPIK_API_KEY;
+const USE_AGENTQL = !!process.env.MINO_API_KEY;
 
 // Output directory for saved results
 const OUTPUT_DIR = path.join(process.cwd(), 'output');
@@ -39,7 +41,11 @@ app.use((req, res, next) => {
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    apis: { yutori: USE_YUTORI, freepik: USE_FREEPIK },
+    apis: { 
+      agentql: USE_AGENTQL,
+      yutori: USE_YUTORI, 
+      freepik: USE_FREEPIK 
+    },
     customer: 'Corgi AI',
     use_case: 'Startup Insurance Research'
   });
@@ -117,14 +123,36 @@ app.post('/generate', async (req, res) => {
     
     console.log(`[${runId}] Target: ${company_name || domain}, Persona: ${persona}`);
     
+    let evidence = null;
     let briefData = null;
     let heroImage = null;
 
-    // Phase 1: Yutori Research (or mock)
+    // Phase 1: AgentQL Web Scraping (gather evidence)
+    if (USE_AGENTQL) {
+      try {
+        console.log(`[${runId}] Calling AgentQL to scrape ${domain}...`);
+        evidence = await extractCompanyEvidence(domain);
+        console.log(`[${runId}] ✓ AgentQL evidence collected`);
+        
+        // Log what was found
+        const hasHomepage = Object.keys(evidence.homepage_insights || {}).length > 0;
+        const hasPricing = evidence.pricing_insights !== null;
+        const hasCareers = evidence.careers_insights !== null;
+        const hasBlog = evidence.blog_insights !== null;
+        console.log(`[${runId}]   Homepage: ${hasHomepage ? '✓' : '✗'}, Pricing: ${hasPricing ? '✓' : '✗'}, Careers: ${hasCareers ? '✓' : '✗'}, Blog: ${hasBlog ? '✓' : '✗'}`);
+      } catch (error) {
+        console.error(`[${runId}] AgentQL failed (non-fatal): ${error.message}`);
+        evidence = null;
+      }
+    } else {
+      console.log(`[${runId}] AgentQL disabled - skipping web scraping`);
+    }
+
+    // Phase 2: Yutori Research (with evidence context)
     if (USE_YUTORI) {
       try {
         console.log(`[${runId}] Calling Yutori Research API...`);
-        briefData = await generateAccountBrief(domain, company_name, persona, offer);
+        briefData = await generateAccountBrief(domain, company_name, persona, offer, evidence);
         console.log(`[${runId}] ✓ Yutori research complete`);
       } catch (error) {
         console.error(`[${runId}] Yutori failed: ${error.message}`);
@@ -140,7 +168,7 @@ app.post('/generate', async (req, res) => {
       briefData.company.domain = domain;
     }
 
-    // Phase 2: Freepik Image (optional)
+    // Phase 3: Freepik Image (optional)
     if (USE_FREEPIK && briefData) {
       try {
         console.log(`[${runId}] Generating hero image...`);
@@ -173,8 +201,10 @@ app.post('/generate', async (req, res) => {
       customer: 'Corgi AI',
       target: company_name || domain,
       data: briefData,
+      evidence: evidence, // Include scraped evidence in response
       meta: {
         duration_seconds: parseFloat(duration),
+        agentql_used: USE_AGENTQL && evidence !== null,
         yutori_used: USE_YUTORI,
         freepik_used: !!heroImage
       }
@@ -217,8 +247,9 @@ app.listen(PORT, () => {
   console.log(`📋 Customer: Corgi AI (Startup Insurance)`);
   console.log(`📡 Server: http://localhost:${PORT}`);
   console.log(`\n🔧 APIs:`);
-  console.log(`   Yutori: ${USE_YUTORI ? '✓' : '✗'}`);
-  console.log(`   Freepik: ${USE_FREEPIK ? '✓' : '✗'}`);
+  console.log(`   AgentQL: ${USE_AGENTQL ? '✓' : '✗'} (web scraping)`);
+  console.log(`   Yutori:  ${USE_YUTORI ? '✓' : '✗'} (research)`);
+  console.log(`   Freepik: ${USE_FREEPIK ? '✓' : '✗'} (images)`);
   console.log(`\n📂 Output:`);
   console.log(`   Results: ${RESULTS_DIR}`);
   console.log(`   Images:  ${path.join(OUTPUT_DIR, 'images')}`);
@@ -227,5 +258,6 @@ app.listen(PORT, () => {
   console.log(`   GET  /targets   - Target company list`);
   console.log(`   GET  /results   - List saved results`);
   console.log(`   POST /generate  - Generate account brief`);
-  console.log(`\n🎯 Demo targets: Yutori, Retool, TinyFish, Cline AI, Freepik\n`);
+  console.log(`\n🎯 Demo targets: Yutori, Retool, TinyFish, Cline AI, Freepik`);
+  console.log(`\n⚡ Pipeline: AgentQL (scrape) → Yutori (research) → Freepik (image)\n`);
 });
