@@ -23,7 +23,6 @@ An AI-powered account research agent that helps **Corgi AI** (startup insurance)
 | **Express Server** | ✅ Working | Running on localhost:3000 |
 | **Yutori Research API** | ✅ Working | Returns real company research (takes 3-5 mins) |
 | **Freepik Image API** | ⚠️ Partial | Calls succeed but image URL not always returned |
-| **AgentQL** | ⏸️ Disabled | Simplified for demo speed |
 | **Mock Fallback** | ✅ Working | Instant fallback if Yutori fails |
 
 ## 🚀 Quick Demo (What You Need To Do)
@@ -158,7 +157,10 @@ chopin/
 │   │   └── yutoriPrompt.js   # Simplified prompt for Corgi AI
 │   └── schemas/
 │       └── responseSchema.js # Target companies & mock data
-├── DEMO_READY.md             # Detailed demo instructions
+├── DEMO_SCRIPT.md            # 3-min demo with pre-saved results ⭐
+├── RETOOL_AGENT_SETUP.md     # Quick agent setup (<5 min)
+├── QUICKSTART.md             # Getting started guide
+├── DEMO_READY.md             # Status & quick commands
 └── README.md                 # This file
 ```
 
